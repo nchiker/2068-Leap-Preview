@@ -9,15 +9,17 @@ This repository distributes ready-to-run preview builds and documentation.
 Development source remains in a separate private repository during preview
 testing.
 
-## Download
+## Files in this repository
 
-Open the [latest release](../../releases/latest) and download:
+Everything needed to try the preview is also visible in the repository:
 
-- `test_basic.bin` and `exrom.bin` for a TS2068 emulator with separate Home
-  ROM and EXROM images;
-- `ts2068rom_zesarux.bin` for ZEsarUX;
-- `2068_Leap_Users_Manual.docx` or the complete documentation ZIP;
-- `RELEASE_SHA256SUMS.txt` to verify the ROM downloads.
+- [`roms/`](roms/) — Home ROM, EXROM, combined ZEsarUX image, and checksums;
+- [`docs/`](docs/) — Word user manual and all Markdown reference documents;
+- [`demos/`](demos/) — showcase and smoke-test BASIC programs.
+
+The same files, plus a single documentation ZIP, are attached to the
+[Public Preview 1 release](../../releases/tag/v0.1.0-preview.1) for convenient
+one-page downloading.
 
 ## Run in Fuse
 
