@@ -124,7 +124,7 @@ purpose, cross-referenced from the Programmer's Reference.
   control-flow features; the current editor, BASIC, fill, and GOSUB stacks
   are allocated and tested.
 - Reclaim or relocate additional cold code before expanding the language;
-  the private-preview build has 2 Home-ROM bytes and 99 EXROM bytes free.
+  the corrected preview build has 13 Home-ROM bytes and 99 EXROM bytes free.
   `make budget` is authoritative as these figures change.
 - **Label table**: the current top-level implementation is working and
   checked on every commit and before `RUN`. Revisit its fixed capacity when

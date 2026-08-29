@@ -20,8 +20,16 @@ This is the first public, test-gated preview of 2068 Leap for Timex Sinclair
 - Nine standalone smoke ROMs assemble successfully.
 - Automated wrapped-line editor regression passes.
 - Showcase validation reaches its green completion border.
-- Home ROM has 2 bytes free; EXROM has 99 bytes free; the dynamic RAM pool is
+- Home ROM has 13 bytes free; EXROM has 99 bytes free; the dynamic RAM pool is
   1857 bytes.
+
+## Corrected preview build
+
+- Cold start now initializes the complete ROM-owned `$8000-$BFFF` RAM region.
+  This fixes inconsistent startup in emulators that randomize RAM on a hard
+  reset.
+- `roms/exrom.dck` packages the EXROM for the Timex ROM Cartridge field in
+  EightyOne v1.41. See `docs/eightyone_setup.md`.
 
 ## Important preview boundary
 

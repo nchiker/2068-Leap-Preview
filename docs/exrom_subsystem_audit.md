@@ -4,7 +4,7 @@ Status: complete pass, reconciled for the private preview on 2026-08-27.
 
 ## Capacity and governing constraint
 
-The current production images use `$3FFE/$4000` in Home ROM (2 bytes free)
+The current production images use `$3FF3/$4000` in Home ROM (13 bytes free)
 and end at `$DF9D` in EXROM (99 bytes free). The shared
 program/array/scalar RAM pool is 1857 bytes. These figures come from
 `make budget`; historical measurements elsewhere in the engineering journal
