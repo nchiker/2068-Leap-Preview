@@ -1,8 +1,8 @@
-# 2068 Leap — Technical Overview
+# 2068-Leap — Technical Overview
 
 ## Purpose
 
-2068 Leap asks what the Timex Sinclair 2068 ROM might have looked like if
+2068-Leap asks what the Timex Sinclair 2068 ROM might have looked like if
 its software had been redesigned around the machine rather than remaining a
 close relative of the 48K Spectrum ROM. The result is a working 16K Home ROM
 plus an 8K banked EXROM, still instant-on and usable on a stock 48K TS2068,
@@ -54,7 +54,8 @@ concatenation, comparisons, case conversion, slicing, `CHR$`, `STR$`, `LEN`,
 ### Graphics designed for the TS2068
 
 The bitmap API provides `PLOT`, `POINT`, absolute-coordinate `LINE`, filled
-`BLOCK`, clipped `CIRCLE`, bounded-stack flood `FILL`, and coarse `CPLOT`.
+clipped `CIRCLE` and bounded-stack flood `FILL`; `BLOCK` and coarse `CPLOT` are
+the reference RAM-loaded BASIC extension.
 Text and graphics share `INK`, `PAPER`, `BRIGHT`, `FLASH`, `INVERSE`, and
 `OVER`; `OVER 1` XOR-plots both pixels and text.
 
@@ -113,7 +114,7 @@ High Resolution Graphics.
 - Standalone smoke ROMs exercise memory, math, and canonical editor operations.
 - A production editor harness injects keys through the real interrupt latch
   and crosses the real Home↔EXROM trampoline.
-- The integrated Fuse suite contains 68 fixtures covering control flow,
+- The integrated Fuse suite contains 92 fixtures covering control flow,
   expressions, memory, arrays, strings, graphics, sound, sprites, I/O,
   ULAplus, errors, and machine-code entry.
 - `make budget` reports exact Home ROM, EXROM, and RAM margins; assembler

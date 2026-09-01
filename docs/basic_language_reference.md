@@ -1,4 +1,4 @@
-# 2068 Leap BASIC Language Reference
+# 2068-Leap BASIC Language Reference
 
 Status: DRAFT — starting with the one decision everything else depends on:
 how the language is structured without line numbers. Grows alongside
@@ -283,6 +283,14 @@ comes back either way). Deliberately NOT the scoped, parameter-taking
 variables, no parameter binding, no per-procedure label scoping; those
 remain just this design document's own aspiration, not built.
 
+### DEF FN — minimal numeric form implemented
+
+`DEF FN S(X)=X*X` defines one single-letter, one-parameter numeric function;
+`FN S(6)` invokes it in any numeric expression. The definition becomes active
+when execution reaches the `DEF` statement. This first bounded form has no
+string result, multiple parameters, or recursion. Its parameter is an internal
+temporary binding and does not overwrite a BASIC scalar of the same letter.
+
 ### PEEK / POKE / USR / FREE — implemented (2026-08-22)
 
 `PEEK(addr)` / `POKE addr,value` / `USR(addr)` are the classic-BASIC raw
@@ -530,12 +538,12 @@ gives `OVER` for `PLOT`/`DRAW`/`CIRCLE`, not just `PRINT`).
 |---|---|
 | `PLOT <x>,<y>` | Set one pixel — implemented, via `kernel/graphics`'s `GFX_WRITE_PIXEL` |
 | `LINE <x0>,<y0> TO <x1>,<y1>` | Draw a line between two points — implemented, via `kernel/graphics`'s `GFX_LINE` (Bresenham's algorithm, integer-only) |
-| `BLOCK <x0>,<y0> TO <x1>,<y1>` | Fill a rectangle — implemented, via `kernel/graphics`'s `GFX_BLOCK`. Same grammar shape as `LINE`; the two corners can be given in any order, `BASIC_STMT_BLOCK` normalizes them |
+| `BLOCK <x0>,<y0> TO <x1>,<y1>` | Optional 168-byte loadable extension. Preserves the former resident syntax, including reversed-corner normalization |
 | `CIRCLE <x>,<y>,<r>` | Draw a circle outline — implemented, via `kernel/graphics`'s `GFX_CIRCLE` (midpoint circle algorithm, integer-only). A radius that pushes the circle past the screen edge is simply clipped there, same as any other out-of-range point |
 | `FILL <x>,<y>` | Flood fill the connected region from that seed point — implemented, via `kernel/graphics`'s `GFX_FILL`. 4-connected, using an explicit bounded stack (2048 entries) rather than recursion; a large enough enclosed region can exhaust it, at which point the fill simply stops expanding further rather than crashing — see the programmer's reference for the real numbers behind that size |
 | `POINT(x,y)` | Function — `1` if that pixel is currently set, `0` if not; implemented, via `kernel/graphics`'s `GFX_READ_PIXEL`. QL-named deliberately (`GFX_READ_PIXEL` is the write-side's read-back counterpart, `PLOT` stays the imperative Sinclair-flavored write) |
 | `ATTR(row,col)` | Function — reads the normal 32×24 screen's attribute byte through the shared bounded attribute-address primitive; returns `0` for an out-of-range row or column |
-| `CPLOT <cx>,<cy>` | Coarse 2x2-per-cell block-graphics plot — implemented, via `kernel/graphics`'s `GFX_CPLOT`. `cx` is 0-63, `cy` is 0-47 (both clamped — unlike `PLOT`'s `x`, neither is a full byte's natural range). Mode-aware in Normal and High Resolution Graphics mode (colors one attribute per touched scanline in the latter) |
+| `CPLOT <cx>,<cy>` | Optional 132-byte loadable extension. It registers the natural syntax and draws a coarse 2x2-per-cell block; `cx` is clamped to 0-63 and `cy` to 0-47. Without the module, CPLOT is a syntax error |
 | `MODE <n>` | Switch video mode — implemented, via `kernel/graphics`'s `GFX_SET_MODE`. `n` is `0` (Normal) or `1` (High Resolution Graphics — same 256x192 bitmap, finer 8x1 attribute resolution); anything else is a runtime `INVALID MODE` error, not silently clamped |
 | `ULAPLUS <n>` | Enable (`1`) or disable (`0`) the ULAplus palette extension. Other values produce `INVALID ARGUMENT`. |
 | `PALETTE <index>,<value>` | Write ULAplus palette register 0-63 with a value from 0-255 in `GGGRRRBB` format. Out-of-range values produce `INVALID ARGUMENT`. |
@@ -546,7 +554,7 @@ runtime error, or `BREAK`—disables ULAplus before the editor is shown again.
 Palette register values remain programmed, so a later `ULAPLUS 1` can reuse
 them without issuing the `PALETTE` statements again.
 
-`BLOCK` and `CIRCLE` (like `PLOT`/`LINE`) color their pixels using the
+`CIRCLE` (like `PLOT`/`LINE`) colors its pixels using the
 current `INK`/`PAPER`/`FLASH`/`INVERSE`/`OVER` state — see the shared
 paragraph above. `CPLOT` does too.
 
@@ -577,6 +585,8 @@ a design note, not code.
 |---|---|
 | `BEEP <duration>,<pitch>` | Square-wave tone via the speaker — implemented (2026-08-22), see below |
 | `SOUND <register>,<data>` | Write directly to the AY-3-8912 PSG — implemented (2026-08-22), see below |
+| `AYREG <register>,<data>` | Optional 53-byte loadable extension using native AY register numbers 0-15 and data 0-255; unavailable until its RAM module is installed |
+| `OUT <port>,<data>` | Optional 39-byte loadable extension performing native Z80 output to a 16-bit port with byte data; unavailable until its RAM module is installed |
 
 **`BEEP <duration>,<pitch>` — implemented, but deliberately NOT the
 real command's grammar (2026-08-22)**. Real classic BASIC's `BEEP`
@@ -612,6 +622,10 @@ caught and fixed before it ever shipped).
 |---|---|
 | `INPUT` | Read a line of input into a variable, classic BASIC style |
 | `INKEY$()` | Read one keypress without waiting — implemented (2026-08-22), see below |
+
+`INPUT` accepts numeric and string targets, with an optional literal prompt:
+`INPUT "Age: ";A` or `INPUT "Name: ";A$`. The prompt is not yet a general
+string expression.
 
 **`INKEY$()` — implemented, returns a real string (2026-08-22)**:
 called with empty parens, `INKEY$()`, matching this dialect's own
@@ -724,7 +738,7 @@ section for the complete design if this is ever worth reviving.
 
 ### String functions (2026-08-22)
 
-**Implemented** — 8 string-returning functions plus `LEN`/`CODE`/`VAL`
+**Implemented** — 8 string-returning functions plus `LEN`/`CODE`/`VAL`/`INSTR`
 (number-returning, string-argument), all usable anywhere a string or
 number expression is expected: assignment, `PRINT`, `IF` comparison,
 even nested inside each other (`UPPER$(LEFT$(A$,3))`,
@@ -741,15 +755,12 @@ even nested inside each other (`UPPER$(LEFT$(A$,3))`,
 | `LEN(s$)` | The length of `s$`, 0-31 |
 | `CODE(s$)` | The ASCII code of `s$`'s first character, 0 for an empty string |
 | `VAL(s$)` | Parses `s$` as a decimal integer, tolerant of a leading `-`; stops at the first non-digit rather than erroring; `0` for anything unparseable |
+| `INSTR(haystack$,needle$)` | 1-based position of the first match; `0` when absent; an empty needle returns `1` |
 
-**Not implemented**: `INSTR` and `FILL$` were both dropped
-(2026-08-22) to fit Home ROM's own 16K budget — see `docs/
-programmers_reference.md`'s `basic/` "String functions" section for
-the full reasoning and the real bugs found and fixed getting the rest
-of this feature working (a nested-string-function-call clobbering bug
-in the argument-parsing stack discipline, and two separate places
-where the advanced parse position wasn't correctly propagated back to
-the caller — both caught by live emulator testing, not static review).
+`INSTR` was restored on 2026-08-30 after DEF-FN parser consolidation made
+room in Home ROM. `FILL$` remains unimplemented. See `docs/
+programmers_reference.md`'s `basic/` "String functions" section for the
+earlier implementation history and parser bugs found by live emulator tests.
 
 **`INKEY$()` upgraded to a real string (2026-08-22)** — supersedes
 the plain-integer version described below. Called with empty parens,

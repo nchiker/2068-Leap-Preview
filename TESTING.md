@@ -1,4 +1,4 @@
-# Preview testing guide
+# Release 1 Beta testing guide
 
 Useful areas for public-preview testing include:
 
@@ -9,12 +9,15 @@ Useful areas for public-preview testing include:
 - sprites and collision detection;
 - AY sound;
 - ULAplus palette entry and return to the normal editor display;
+- loadable CPLOT, BLOCK, FRAME, INVERT, AYREG, and OUT commands, including
+  `NEW` lifecycle behavior;
 - longer programs that combine several subsystems.
 
 When reporting an issue, include:
 
 1. Emulator and exact version, or real TS2068 hardware details.
 2. Which ROM files were installed and where.
+   Use `roms/exrom.dck`, not raw `exrom.bin`, for EightyOne's cartridge field.
 3. The shortest BASIC program or keystroke sequence that reproduces it.
 4. Expected and observed behavior.
 5. A screenshot, saved program, or memory dump when available.

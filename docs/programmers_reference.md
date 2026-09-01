@@ -1,4 +1,4 @@
-# 2068 Leap Programmer's Reference
+# 2068-Leap Programmer's Reference
 
 Status: DRAFT — grows one module at a time, alongside the code. Each section
 below corresponds to a kernel module; only `kernel/editor` exists so far.
@@ -77,9 +77,10 @@ a scrollable, cursor-addressable view.
 **Moved to EXROM (2026-08-22)**: the production ROM no longer builds this
 module Home-resident — see the dedicated "`kernel/editor` moved to EXROM"
 section under `basic/` below for the full migration writeup (why, the
-paging design, and live interactive verification). `kernel/editor/
-editor.asm` itself is unchanged and still builds/runs standalone (`rom/
-test_editor.asm`); it's no longer part of `include/kernel_api.inc`'s
+paging design, and live interactive verification). `kernel/editor/editor.asm`
+is now a compatibility adapter that includes the canonical EXROM body and
+still builds/runs standalone (`rom/test_editor.asm`); it is no longer part of
+`include/kernel_api.inc`'s
 contract, since `basic/` now reaches it through its own `BASIC_EDITOR_*_
 EXROM` wrappers instead of calling these labels directly. The rest of this
 section (behavioural design, routine list) still describes the module's
@@ -92,7 +93,7 @@ compiled" for every routine name below.
 |-----------------------|-------------------------------------------------------|
 | `EDITOR_INIT`          | Reset editor state. Call at cold start and on `NEW`. |
 | `EDITOR_ENTER`         | Take over screen/keyboard, run the edit loop.        |
-| `EDITOR_EXIT`          | Commit the current line, return to BASIC.            |
+| `EDITOR_EXIT`          | End editing; BASIC owns tokenization and commit.      |
 | `EDITOR_INSERT_CHAR`   | Insert one char at the cursor.                       |
 | `EDITOR_DELETE_CHAR`   | Delete the char at the cursor.                       |
 | `EDITOR_MOVE_CURSOR`   | Move cursor one step, or jump (home/end/top/bottom). |
@@ -155,17 +156,17 @@ rather than duplicating the shift logic, and `EDITOR_LOOP` now calls it
 instead. `EDITOR_DELETE_CHAR` itself is unchanged and still available
 as a forward-delete primitive for whenever that's needed separately.
 
-`EDIT_PROGRAM_POS` (new scratch var) is now tracked by `EDITOR_ENTER`
-and available to `EDITOR_EXIT` — but **`EDITOR_EXIT` deliberately does
-NOT call `MEM_LINE_STORE` yet**. Checking the two format contracts
+`EDIT_PROGRAM_POS` is tracked by `EDITOR_ENTER` and remains available when
+`EDITOR_EXIT` returns. **`EDITOR_EXIT` deliberately does not call
+`MEM_LINE_STORE`.** Checking the two format contracts
 against each other surfaced a real bug before it shipped:
 `EDIT_LINE_BUF` holds raw null-terminated ASCII, while `MEM_LINE_STORE`
 expects the length-prefixed, tokenized statement format. Calling it as
 originally stubbed would have misread the first two typed characters as
 a length field and corrupted the program area. That conversion (raw
-text -> tokenized statement) is a `basic/` tokenizer concern, not
-`kernel/editor`'s — deferred until `basic/` exists, with the position
-already tracked and ready for when it does.
+text -> tokenized statement) is a `basic/` tokenizer concern, not the
+generic editor's. `BASIC_COMMAND_LOOP` now performs that conversion and
+commit after the EXROM editing session returns.
 
 **Now has a blinking cursor indicator**: `EDITOR_REDRAW_SCREEN` shows
 the cursor as an inverse-video block at `EDIT_BUF_OFFSET`'s column, via
@@ -2069,7 +2070,8 @@ the register plumbing around it does not), computes operand pointers
 via `CALC_STK_PNTRS_UNARY`/`_BINARY` (recomputed fresh from `CALC_SP`
 every call, never carried incrementally), and dispatches through
 `CALC_TABLE` (66 entries, `$00`-`$41`, matching the real ROM's own
-`CALCADDR` table size).
+literal numbering). V2 stores only implemented entries in a sparse table;
+unavailable indices take the shared recoverable error path.
 
 **Internal record format** (`CALC_UNP_A`/`CALC_UNP_B`, 6 bytes each,
 filled by `CALC_UNPACK` and read by `CALC_PACK`/the arithmetic
@@ -2082,21 +2084,19 @@ handles both the packed 5-byte GENERAL float form and the small-int
 FAST form (byte0=`$00` marker, byte1=sign, bytes2-3=16-bit magnitude);
 `CALC_PACK` always writes GENERAL form.
 
-**Ops implemented in `CALC_TABLE`** (everything else still dispatches
-to `CALC_OP_UNIMPLEMENTED`, which hangs via `jr`-to-self and records
-the table index in `CALC_UNIMPLEMENTED_LITERAL_FLAG` — this project's
-"store the real value, don't guess" idiom, not the Z80 `HALT` opcode):
+**Ops implemented in `CALC_TABLE`** (everything else records
+`CALC_ERR_UNIMPLEMENTED`, skips to END-CALC, and returns normally):
 
 | Literal | Op | Status |
 |---|---|---|
-| `$01` | `CALC_OP_EXCHANGE` | Ported directly from the real ROM (335B.html). Python/`z80sim`-verified only — `rom/test_calc_smoke_stackops.asm` exists but not yet run against real hardware/Fuse. |
+| `$01` | `CALC_OP_EXCHANGE` | Ported directly from the real ROM (335B.html); z80sim- and Fuse-verified. |
 | `$02` | `CALC_OP_DELETE` | Same as above. |
 | `$03` | `CALC_OP_SUB` | **Hardware/Fuse-confirmed** (`rom/test_calc_smoke_arithmetic.asm`, green). Computed as `A + (-B)` via the shared `CALC_ADDSUB_ENGINE`. |
 | `$04` | `CALC_OP_MUL` | **Hardware/Fuse-confirmed.** Real 32×32→64 unsigned multiply via shift-add (`CALC_MUL_ACC`/`CALC_MUL_CAND`), sign = XOR, one conditional post-loop renormalization shift. |
 | `$05` | `CALC_OP_DIV` | **Hardware/Fuse-confirmed** (`rom/test_calc_smoke_division.asm`, green — added 2026-08-21, see below). |
 | `$0F` | `CALC_OP_ADD` | **Hardware/Fuse-confirmed.** Shared `CALC_ADDSUB_ENGINE`: picks the larger-magnitude operand as the "winner," aligns the loser's mantissa by shifting, same-sign→add-with-renormalize, different-sign→subtract-with-renormalize. |
-| `$31` | `CALC_OP_DUPLICATE` | Ported from the real ROM's "MOVE A FLOATING-POINT NUMBER" (33C0.html), with a different bounds check (this project's `CALC_STACK` is a fixed 8 slots, not the real ROM's free-RAM growth). Python/`z80sim`-verified only — `rom/test_calc_smoke_dupoverflow.asm` exists but not yet run. |
-| `$38` | `CALC_OP_END_CALC` | Tail-jumps to `CALC_EXIT_TRAMPOLINE` (Home-resident) via `KTAB_CALC_EXIT_TRAMPOLINE` — can't page Home back in and then jump to a Home label directly, since that would change what's at this same address range mid-instruction-fetch if not done carefully. Python/`z80sim`-verified only — `rom/test_calc_smoke_endcalc.asm` exists but not yet run. |
+| `$31` | `CALC_OP_DUPLICATE` | Ported from the real ROM's "MOVE A FLOATING-POINT NUMBER" (33C0.html), with a fixed eight-slot bound; success and recoverable overflow are z80sim/Fuse-verified. |
+| `$38` | `CALC_OP_END_CALC` | Tail-jumps through the HOME paging trampoline; z80sim- and Fuse-verified. |
 
 **`CALC_OP_DIV`** (added 2026-08-21, wired in alongside this
 documentation): computes first(lower)/second(top), matching
@@ -2117,9 +2117,8 @@ comparing the truncated value — the actual subtract (mod 2³²) is
 provably correct either way, so no special-casing is needed in the
 subtract itself, only in deciding whether to take it. **Truncates
 toward zero** (matches `MATH_DIVIDE16`'s own convention — does not
-round). Division by zero hangs via the same `jr`-to-self idiom as
-`CALC_OP_UNIMPLEMENTED` (no error-reporting path into this engine from
-BASIC exists yet). Dividend-zero short-circuits straight to a zero
+round). Division by zero returns through the paging-safe calculator error
+path and records `DIVISION BY ZERO` in BASIC. Dividend-zero short-circuits to a zero
 result. Verified via a Python simulation of the exact algorithm
 (abstract-integer model) AND a byte-accurate simulation of the actual
 instruction sequence (4-byte arrays, 8-bit wraparound sub/sbc chains),
@@ -2143,32 +2142,25 @@ ROM's `STACK-A`/`STACK-TO-A` analogs), NOT `CALC_TABLE` literals; no
 RST $28 entry point or `KTAB_*` trampoline slot exists for either yet.
 `CALC_INT_TO_FP` pushes a signed 16-bit int as small-int form.
 `CALC_FP_TO_INT` pops the top of stack and converts to a signed 16-bit
-int, truncating toward zero, setting `CALC_TRUNC_FLAG` on overflow —
-turning a set flag into a real BASIC error is explicitly deferred to
-future LET-assignment integration work, not built yet.
+int, truncating toward zero. Overflow saturates to `$7FFF`/`$8000`, sets
+`CALC_TRUNC_FLAG`, carry, and the BASIC numeric-overflow error.
 
-**Known gaps**: no BASIC integration (see `basic/` section — as of
-this writing `basic/`'s `+ - * /` still call `kernel/math` directly,
-not this engine); no exponent overflow/underflow guard (`CALC_OP_MUL`/
-`CALC_OP_DIV`'s exponent arithmetic is plain 8-bit, same trust level as
-the rest of this file, not yet range-checked); division/multiplication
-by numbers whose product/quotient would over/underflow the biased
-exponent range isn't specifically handled.
+**Known gaps**: most original literals remain unavailable, arithmetic
+truncates rather than fully rounds, and bytecode without an END-CALC marker
+cannot be recovered because the RST `$28` stream has no length field. Exponent
+overflow is reported; exponent underflow is defined as zero.
 
 ### Testing
 
 Each smoke test follows the same green/red border signal as every
 other kernel-module test, standalone (no BASIC keyword needed):
 
-- `rom/test_calc_smoke_stackops.asm` — exchange/delete. Not yet run
-  against real hardware/Fuse.
-- `rom/test_calc_smoke_endcalc.asm` — end-calc round trip. Not yet run.
-- `rom/test_calc_smoke_dupoverflow.asm` — duplicate, including the
-  8-slot overflow path. Not yet run.
-- `rom/test_calc_smoke_unimpl.asm` — confirms an unimplemented literal
-  actually hangs (only real hardware can confirm the machine actually
-  stops, not just that the simulator's model says it should). Not yet
-  run.
+- `rom/test_calc_smoke_stackops.asm` — exchange/delete/duplicate; Fuse green.
+- `rom/test_calc_smoke_endcalc.asm` — end-calc round trip; Fuse green.
+- `rom/test_calc_smoke_dupoverflow.asm` — recoverable eight-slot overflow;
+  Fuse green.
+- `rom/test_calc_smoke_unimpl.asm` — recoverable unavailable literal; Fuse
+  green.
 - `rom/test_calc_smoke_arithmetic.asm` — add/sub/mul.
   **Hardware/Fuse-confirmed, green.**
 - `rom/test_calc_smoke_division.asm` — division, two cases (an exact
@@ -3670,6 +3662,9 @@ exact same destroys-HL mistake `BASIC_REPORT_ERROR` made once,
 documented on `ERR_MSG_PTR`) — and `HELP_ROW` (1 byte), the current
 row while the line-printing loop runs, kept in memory since
 `GFX_PRINT_STRING` destroys `BC`.
+
+The resident HELP implementation was later retired for ROM space, and its
+remaining `HELP_ROW` byte was reclaimed after an independent dead-state audit.
 
 **A real, general leftover-rows bug found from the user's first test of
 this feature.** A screenshot showed rows 3-13 of the editor view still
