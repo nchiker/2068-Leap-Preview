@@ -23,3 +23,8 @@ When reporting an issue, include:
 5. A screenshot, saved program, or memory dump when available.
 
 Do not include private information in public issues.
+
+For EightyOne, leave randomized power-on RAM enabled when possible. The
+corrected preview initializes its owned RAM and should boot consistently
+without relying on the emulator to clear memory. See
+[`docs/eightyone_setup.md`](docs/eightyone_setup.md) for version 1.41 setup.

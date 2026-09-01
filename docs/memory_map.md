@@ -1,4 +1,4 @@
-# 2068-Leap — Memory Map
+# 2068 Leap — Memory Map
 
 Status: DRAFT — living document, updated alongside code.
 
@@ -10,15 +10,7 @@ Status: DRAFT — living document, updated alongside code.
 | $4000-$57FF   | 6K    | Screen display file (bitmap), standard Spectrum-compatible layout |
 | $5800-$5AFF   | 768B  | Screen attributes |
 | $5B00-$7FFF   | ~10.3K | Reserved for the video hardware's own use (see below) — nothing this project owns lives here |
-| $8000-$BFFF   | 16K | System variables (`include/sysvars.inc`, starting at $8000) followed by the dynamic BASIC program/array/scalar pool (`PROG_AREA_START`=$8426 through $BFFF; 15,322 bytes) |
-| $C000-$E7FF   | 10K | Transient `FILL` visited bitmap and coordinate stack while HOME RAM is mapped; no state here survives or overlaps an EXROM call |
-| $E800-$F0FF   | 2.25K | Persistent sprite image/background buffers; chunk 7 remains visible during EXROM calls |
-| $F100-$F327   | 552B | Persistent label table, UDGs, editor/LOAD-name buffer, and detokenizer buffer |
-| $F328-$F3A7   | 128B | Persistent string-function scratch pool, relocated from chunk 4 |
-| $F3A8-$F3AE   | 7B | Minimal numeric `DEF FN` runtime state |
-| $F3AF-$F3C2   | 20 | Extension registry, INSTR scratch, and fixed callable service ABI |
-| $F400-$F5FF   | 512 | Single loadable-extension module window |
-| $F600-$FEFF   | 2,304 | Genuine machine-stack headroom below `$FF00` |
+| $8000-$FEFF   | ~31.8K | System variables (`include/sysvars.inc`, $8000-$84AC), BASIC program area (`PROG_AREA_START`=$84AD onward), editor line buffer, GOSUB/FOR stacks, spare RAM |
 | $FF00-$FFFF   | 256B  | BASIC/machine stack (grows down from `$FF00`) |
 
 **Why `$5B00`-`$7FFF` is off-limits, not just "reserved for later":** the
@@ -132,25 +124,8 @@ purpose, cross-referenced from the Programmer's Reference.
   control-flow features; the current editor, BASIC, fill, and GOSUB stacks
   are allocated and tested.
 - Reclaim or relocate additional cold code before expanding the language;
-  the V2 candidate has 1 Home-ROM byte and 2 EXROM bytes free.
+  the corrected preview build has 13 Home-ROM bytes and 99 EXROM bytes free.
   `make budget` is authoritative as these figures change.
-- `FILL` no longer permanently consumes 10,240 bytes below
-  `PROG_AREA_START`: its visited bitmap and bounded coordinate stack occupy
-  `$C000-$E7FF` only for the duration of the HOME-ROM fill operation. Assembly
-  assertions keep this scratch below the `$FF00` machine stack.
-- The 2,304-byte sprite image/background buffers occupy `$E800-$F0FF`.
-  EXROM only pages chunk 6 (`$C000-$DFFF`), so its sprite driver can access
-  these persistent chunk-7 buffers directly.
-- `$F100-$F327` packs the 128-byte label table, 168-byte UDG table, 128-byte
-  editor/LOAD-name buffer, and 128-byte detokenizer buffer. A blocking named
-  LOAD may reuse the already-parsed edit line, but string-function evaluation
-  retains a separate lower-RAM pool because the static checker can run while
-  an uncommitted edit line is live. The pool now occupies `$F328-$F3A7` in
-  always-visible chunk 7. `DEF FN` uses the next seven bytes; the extension
-  registry/service ABI, grammar descriptor/four argument bytes, and fixed
-  module window occupy `$F3AF-$F5FF`, leaving
-  2,304 bytes (`$F600-$FEFF`) below the machine stack. A canary-based valid nested-expression run measured a
-  126-byte peak, so this retains more than 23 times that observed usage.
 - **Label table**: the current top-level implementation is working and
   checked on every commit and before `RUN`. Revisit its fixed capacity when
   procedures introduce nested scopes.
