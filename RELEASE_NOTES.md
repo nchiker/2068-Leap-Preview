@@ -1,39 +1,127 @@
-# 2068 Leap Public Preview 1
+# 2068-Leap — Release 1 Beta
 
-This is the first public, test-gated preview of 2068 Leap for Timex Sinclair
-2068 users and emulator testers.
+2068-Leap Release 1 Beta is the first public beta of the redesigned Timex Sinclair 2068
+ROM. It concentrates on a practical full-screen BASIC environment, ROM
+headroom, subsystem correctness, and regression coverage rather than cartridge
+support.
 
-## Highlights
+## Release 1 Beta highlights
 
-- Structured, line-number-free BASIC with a full-screen editor.
-- Numeric scalars and arrays, fixed-length strings and string arrays.
-- Timex high-resolution graphics, Spectrum graphics, sprites, AY sound, and
-  ULAplus palette control with editor-safe mode restoration.
-- Stock TS2068/Sinclair tape framing for `SAVE` and `LOAD`, including progress
-  reporting and validation before replacing the current program.
-- Screen queries through `POINT()` and `ATTR()`.
-- Styled Word user manual and a complete documentation bundle.
+- Recovered ROM space with symbol-derived BASIC audits and table-driven BASIC
+  execution, numeric-function, and EXROM checker dispatch.
+- Established one canonical production editor implementation and documented
+  the boundary between generic editing and BASIC-specific integration.
+- Hardened the EXROM calculator against invalid literals, stack underflow and
+  overflow, division by zero, numeric overflow, and conversion boundaries.
+- Restored six standalone calculator smoke ROMs and made calculator and sprite
+  simulator checks part of the normal validation gate.
+- Hardened sprite parsing and state transitions: complete 16-bit range checks,
+  transactional `MOVE`, safe re-`GRAB`, initialized state, and overflow-safe
+  kernel bounds checks.
+- Added an eight-slot display stack. Overlapping save-under sprites must be
+  moved or hidden in reverse `SHOW` order; invalid operations fail before the
+  screen changes.
+- Global screen transformations (`CLS`, `MODE`, scrolling, editor entry, and
+  paths using `CLS` such as RUN/NEW/LOAD/help) invalidate displayed sprite
+  state while preserving captured images for reuse.
+- Cold start now clears the complete ROM-owned `$8000-$BFFF` RAM region before
+  any sysvar, bank-depth counter, hook, or port shadow is read. Startup no
+  longer depends on an emulator providing zero-filled RAM.
+- Replaced resident `CPLOT` with the 132-byte reference RAM BASIC extension.
+  Its single-slot gateway validates the existing two-expression grammar in ROM,
+  invalidates cached editor errors on registration, and unregisters on `NEW`.
+- Added `SAVE "name" LINE n`; the stock autostart header field records a
+  one-based statement index and a successful LOAD begins there. Invalid saved
+  indices leave the program loaded without running it.
+- Added literal prompted input: `INPUT "Age: ";A` and
+  `INPUT "Name: ";A$`, retaining the existing numeric and string bounds.
+- Retired the resident HELP screen to fund the higher-priority storage and
+  input work. The editor navigation reference remains in the user manual.
 
 ## Validation baseline
 
-- 68 integrated BASIC fixtures pass.
-- Nine standalone smoke ROMs assemble successfully.
-- Automated wrapped-line editor regression passes.
-- Showcase validation reaches its green completion border.
-- Home ROM has 13 bytes free; EXROM has 99 bytes free; the dynamic RAM pool is
-  1857 bytes.
+- All 92 integrated BASIC fixtures pass. `BLOCK` is restored as a 168-byte loadable
+  module, including reversed-corner, unloaded, and `NEW` lifecycle coverage.
+  The formerly failing `gfx5` fixture exposed a harness-only initialization
+  gap: the injected runner skipped production cold boot's PAPER=7 setup.
+  Full-engine `MEM_INIT` now owns that shared reset, fixing the harness while
+  consolidating two production calls into one.
+- Added the 212-byte loadable `FRAME x0,y0 TO x1,y1` module without consuming
+  Home ROM or EXROM. Its tests cover all four edges, reversed corners,
+  OVER-twice restoration, unloaded rejection, and `NEW` clearing.
+- Added loadable `INVERT x0,y0 TO x1,y1` without consuming Home ROM or EXROM.
+  Its fixtures cover inclusive and reversed rectangles, applying twice to
+  restore the bitmap, unloaded rejection, and `NEW` clearing.
+- Added the 53-byte loadable `AYREG register,value` module. It uses the
+  existing two-expression grammar and performs native AY port I/O locally,
+  consuming no Home ROM, EXROM, or new ABI service bytes.
+- Added the 39-byte loadable `OUT port,value` module. It accepts the complete
+  16-bit Z80 port address, validates byte-sized data before touching hardware,
+  and likewise consumes no Home ROM, EXROM, or ABI service bytes.
+- Fixed successful program LOAD leaving the editor's append sentinel with a
+  hardcoded statement index of zero. Loaded programs now publish their real
+  statement count. A second post-load defect in the word-wrap row cache is
+  also fixed: after auto-scroll changes the viewport, the cache is rebuilt for
+  that settled viewport before rendering. Long mixed-width programs now open
+  at the bottom with one cursor on the blank append line, rather than retaining
+  a flashing phantom cursor on the first visible statement.
+- Expanded the interactive showcase to use the 15,322-byte BASIC pool without
+  requiring an external keyword. It now demonstrates `DEF FN`, `FREE()`,
+  ULAplus graphics, sprites, and continuous two-channel AY melody/accompaniment.
+- Fixed control-stack state leaking between executions: `RUN` now clears FOR
+  and GOSUB depths, including frames abandoned by a runtime `GOTO`. A dedicated
+  two-RUN regression harness reproduces the former failure.
+- Nine standalone runtime smoke ROMs pass in Fuse.
+- Fifteen standalone smoke ROM targets assemble successfully.
+- Automated production-editor regression passes.
+- Fixed CAPS SHIFT+ENTER's first-redraw omission: the statement shifted below
+  a newly inserted blank line now remains visible immediately, before the user
+  types into that blank line. The automated editor harness covers the exact
+  two-statement insertion sequence and inspects physical display RAM.
+- Calculator dispatcher, sprite graphics, sprite state, display-order, and
+  invalidation simulator checks pass through `make check`.
+- Home ROM: 1 byte free; EXROM: 2 bytes free; dynamic RAM pool: 15,322
+  bytes. Transient `FILL` scratch and persistent sprite, label, UDG, editor,
+  and detokenizer storage now use safe upper HOME RAM. The command-phase token,
+  status, EDIT-copy, and multi-statement buffers share
+  one 130-byte reservation; the follow-up audit also removed 45 bytes of dead
+  state. Independent review caught two unsafe lifetime assumptions before
+  commit: named LOAD now retains its filename in the edit buffer, clear of its
+  status callback, and static-checker string functions again have a dedicated
+  128-byte pool so they cannot overwrite an uncommitted edit line.
+- The dedicated string-function pool now lives at `$F328-$F3A7` in
+  always-visible chunk 7, increasing dynamic BASIC RAM by another 128 bytes
+  while leaving 2,304 bytes of genuine stack headroom above the fixed extension
+  state and module window. A canary-based valid
+  nested-expression run observed a 126-byte peak; this is a measurement, not a
+  claimed global maximum.
+- Added minimal classic numeric `DEF FN`: one single-letter function, one
+  numeric parameter, and an expression result (`DEF FN S(X)=X*X`, called as
+  `FN S(value)`). Definitions take effect when execution reaches them;
+  recursion is deliberately rejected. The measured cost is 238 Home bytes and
+  102 EXROM bytes.
+- Added a deterministic named-LOAD regression which stubs only the pulse
+  receiver while exercising the real command parser, progress redraws,
+  filename comparison, `3 -> 7 -> 4` state sequence, and installed bytes.
+- A byte-exact branch audit replaced 70 eligible absolute jumps with relative
+  jumps and inverted five two-branch tails. Unsupported Z80 conditions,
+  historically tight branches, low-margin targets, and editor code were left
+  unchanged. This recovered 11 Home-ROM and 71 EXROM bytes without changing
+  RAM, fixed entry addresses, or the KTAB ABI.
 
-## Corrected preview build
+## Beta boundaries
 
-- Cold start now initializes the complete ROM-owned `$8000-$BFFF` RAM region.
-  This fixes inconsistent startup in emulators that randomize RAM on a hard
-  reset.
-- `roms/exrom.dck` packages the EXROM for the Timex ROM Cartridge field in
-  EightyOne v1.41. See `docs/eightyone_setup.md`.
+- Release 1 Beta is not cartridge-focused; cartridge support and a public cartridge ABI
+  remain deferred.
+- Eight fixed sprite slots reserve 2,352 bytes including metadata and display
+  ordering. Reducing or dynamically allocating them remains a future option.
+- Sprite restoration uses a display stack rather than a compositor, so
+  `HIDE` and `MOVE` must follow reverse display order.
+- The calculator is a focused internal arithmetic service, not a complete
+  implementation of the original Sinclair calculator literal set.
+- Programs use 2068-Leap's structured, line-number-free representation and
+  are not byte-compatible with stock tokenized Sinclair BASIC programs.
 
-## Important preview boundary
-
-2068 Leap is a redesigned BASIC, not a byte-compatible replacement for stock
-Sinclair BASIC programs. Saved programs use standard TS2068 tape framing but
-carry 2068 Leap's native, non-tokenized program payload. Keep backups of work
-created with preview builds.
+The GitHub beta tag should be created only after a clean build, the complete
+emulator validation gate, final Word-manual generation, and packaging of the
+documented ROM and extension artifacts.
